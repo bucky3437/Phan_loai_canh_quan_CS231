@@ -11,15 +11,16 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mob_p
 
 BASE_DIR = Path(__file__).resolve().parent
 TRAIN_DIR = BASE_DIR / "seg"
+MODEL_DIR = BASE_DIR / "Model"
 MODELS = [
     {
         "name": "EfficientNetB0",
-        "path": BASE_DIR / "scene_efficientnetb0.h5",
+        "path": MODEL_DIR / "scene_efficientnetb0.h5",
         "preprocess": eff_preprocess,
     },
     {
         "name": "MobileNetV2",
-        "path": BASE_DIR / "scene_mobilenetv2.h5",
+        "path": MODEL_DIR / "scene_mobilenetv2.h5",
         "preprocess": mob_preprocess,
     },
 ]
@@ -79,6 +80,11 @@ def apply_temperature(probs: np.ndarray, temperature: float) -> np.ndarray:
 def entropy_score(probs: np.ndarray) -> float:
     clipped = np.clip(probs, 1e-12, 1.0)
     return float(-np.sum(clipped * np.log(clipped)))
+
+
+def entropy_contribution(probs: np.ndarray) -> np.ndarray:
+    clipped = np.clip(probs, 1e-12, 1.0)
+    return -clipped * np.log(clipped)
 
 
 
@@ -157,15 +163,24 @@ if uploaded:
         else:
             st.success(f"Prediction: {best_label} ({score_label})")
 
-        if class_names:
-            all_rows = [(name, float(score)) for name, score in zip(class_names, preds)]
+        if ood_method == "entropy":
+            per_class_scores = entropy_contribution(preds)
+            score_column = "entropy_contribution"
+            table_title = "All class entropy contributions:"
         else:
-            all_rows = [(f"class_{idx}", float(score)) for idx, score in enumerate(preds)]
+            per_class_scores = preds
+            score_column = "confidence"
+            table_title = "All class confidences:"
 
-        all_df = pd.DataFrame(all_rows, columns=["label", "confidence"]).sort_values(
-            "confidence",
+        if class_names:
+            all_rows = [(name, float(score)) for name, score in zip(class_names, per_class_scores)]
+        else:
+            all_rows = [(f"class_{idx}", float(score)) for idx, score in enumerate(per_class_scores)]
+
+        all_df = pd.DataFrame(all_rows, columns=["label", score_column]).sort_values(
+            score_column,
             ascending=False,
         )
-        st.write("All class confidences:")
+        st.write(table_title)
         st.dataframe(all_df, hide_index=True, use_container_width=True)
 
