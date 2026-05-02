@@ -1,0 +1,397 @@
+\documentclass[12pt,a4paper]{article}
+
+% Mã hóa UTF-8 cho tiếng Việt
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese,english]{babel}
+
+% Các gói thường dùng
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{placeins}
+\usepackage{float}
+\geometry{left=3cm,right=3cm,top=2.5cm,bottom=2.5cm}
+
+\title{Phân loại cảnh quan tự nhiên}
+\author{Nhóm thực hiện\\Trường Đại học Công nghệ Thông tin}
+\date{\today}
+
+% Điền số liệu định lượng tại đây
+\newcommand{\accMobileNet}{0.9093}
+\newcommand{\accEfficientNet}{0.8907}
+
+\begin{document}
+
+\selectlanguage{vietnamese}
+
+\maketitle
+
+\begin{center}
+    \textbf{Thành viên thực hiện:}\\[4pt]
+    Nguyễn Đức Anh -- 22520053\\
+    Nguyễn Trọng Nhân -- 23521085    
+    \vspace{0.5cm}
+    \textbf{Đánh giá mức độ hoàn thành:}\\
+    Tất cả các yêu cầu đề tài đã được hoàn thành (100\%): xây dựng mô hình, huấn luyện, đánh giá, triển khai demo, báo cáo tổng kết.\end{center}
+
+\begin{abstract}
+Báo cáo trình bày quá trình xây dựng hệ thống phân loại cảnh tự nhiên (scene classification) bằng kỹ thuật học chuyển tiếp (transfer learning) trên bộ dữ liệu gồm 6 lớp: buildings, forest, glacier, mountain, sea, street. Nhóm triển khai và so sánh hai kiến trúc CNN pretrained trên ImageNet là MobileNetV2 và EfficientNetB0. Quy trình gồm tiền xử lý và tăng cường dữ liệu, huấn luyện theo hai giai đoạn (đóng băng backbone và fine--tune một phần lớp cuối), đánh giá trên tập test, và triển khai demo web bằng Streamlit. Để hạn chế trường hợp ảnh ngoài miền (không thuộc 6 lớp) bị ép gán nhãn, hệ thống bổ sung cơ chế từ chối dự đoán dựa trên ngưỡng độ tin cậy (confidence) hoặc entropy của phân phối softmax (kèm temperature scaling).
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%=================================================================
+\section{Giới thiệu và link đồ án trên Github}
+%=================================================================
+
+\subsection{Giới thiệu chung}
+Trong bối cảnh lượng ảnh số được tạo ra và chia sẻ hàng ngày ngày càng lớn, việc tự động hiểu nội dung ảnh trở thành một bài toán quan trọng trong thị giác máy tính. Một trong những bài toán cơ bản là phân loại cảnh (scene classification) -- xác định xem một bức ảnh chụp ngoài trời thuộc loại cảnh nào như: khu nhà ở, rừng cây, núi tuyết, biển, đường phố, \\ldots
+
+Đề tài này tập trung vào việc sử dụng mô hình học sâu với hai backbone phổ biến đã được huấn luyện trước (pretrained) trên ImageNet là MobileNetV2 và EfficientNetB0. Các backbone này được gắn thêm phần \emph{classification head} và được tinh chỉnh (fine--tune) trên bộ dữ liệu cảnh để thực hiện phân loại 6 lớp. Ngoài phần huấn luyện và đánh giá, nhóm xây dựng một web app Streamlit giúp người dùng upload ảnh và xem kết quả dự đoán của cả hai mô hình.
+
+\subsection{Link đồ án trên GitHub}
+Link GitHub của đồ án:
+\begin{center}
+    \textbf{\url{https://github.com/bucky3437/Phan_loai_canh_quan_CS231}}
+\end{center}
+
+%=================================================================
+\section{Lý do thực hiện đề tài}\label{sec:ly-do}
+%=================================================================
+
+Trong bối cảnh lượng ảnh số được tạo ra và chia sẻ hàng ngày ngày càng lớn, việc tự động hiểu nội dung ảnh trở thành một bài toán quan trọng trong thị giác máy tính. Một trong những bài toán cơ bản là phân loại cảnh (scene classification) -- xác định xem một bức ảnh chụp ngoài trời thuộc loại cảnh nào như: khu nhà ở, rừng cây, núi tuyết, biển, đường phố, \\ldots
+
+Việc tự động phân loại cảnh có nhiều ứng dụng thực tế như: gợi ý album ảnh theo chủ đề, hỗ trợ tra cứu hình ảnh, hỗ trợ hệ thống du lịch thông minh, giám sát môi trường (rừng, băng, biển), hay là bước tiền xử lý cho các hệ thống phân tích hình ảnh phức tạp hơn. Thay vì phải gán nhãn thủ công tốn thời gian, mô hình học sâu có thể tự động học ra đặc trưng từ dữ liệu để phân loại chính xác hơn.
+
+Bên cạnh đó, việc nghiên cứu và triển khai mô hình phân loại cảnh bằng mạng nơ-ron tích chập (CNN), đặc biệt là các kiến trúc đã được huấn luyện trước như MobileNetV2 và EfficientNetB0, giúp nhóm có thể củng cố kiến thức về học sâu, transfer learning, xử lý ảnh và quy trình xây dựng một hệ thống trí tuệ nhân tạo hoàn chỉnh (từ tiền xử lý dữ liệu, thiết kế mô hình, huấn luyện, đánh giá, đến triển khai). Đây là lý do chính để lựa chọn đề tài ``Phân loại cảnh tự nhiên'' cho đồ án môn học.
+
+%=================================================================
+\section{Mô tả bài toán}\label{sec:bai-toan}
+%=================================================================
+
+\subsection{Mô tả bài toán}
+Bài toán đặt ra là: cho một ảnh màu chụp cảnh ngoài trời, hệ thống cần tự động xác định xem ảnh đó thuộc một trong các lớp cảnh đã cho trước, ví dụ:
+\begin{itemize}
+    \item \textbf{buildings}: khu nhà, khu đô thị;
+    \item \textbf{forest}: rừng, nhiều cây cối;
+    \item \textbf{glacier}: băng, tuyết, bề mặt phủ băng;
+    \item \textbf{mountain}: núi, đồi núi;
+    \item \textbf{sea}: biển, mặt nước rộng lớn;
+    \item \textbf{street}: đường phố, đường đi có công trình hai bên.
+\end{itemize}
+
+Đây là bài toán phân loại ảnh đa lớp (multi--class, single--label classification), trong đó mỗi ảnh chỉ thuộc đúng một lớp cảnh. Nhóm sử dụng kỹ thuật học chuyển tiếp với hai backbone CNN pretrained trên ImageNet (MobileNetV2 và EfficientNetB0) và fine--tune trên bộ dữ liệu 6 lớp để tận dụng đặc trưng đã học sẵn và giảm thời gian huấn luyện.
+
+\subsection{Dữ liệu vào (Input)}
+Dữ liệu đầu vào là các ảnh màu RGB chụp cảnh ngoài trời, có nội dung thuộc một trong 6 lớp: buildings, forest, glacier, mountain, sea, street. Ảnh gốc có kích thước khác nhau; trước khi đưa vào mô hình, ảnh được:
+\begin{itemize}
+    \item Thay đổi kích thước (resize) về kích thước cố định $224\times 224$ pixels;
+    \item Tiền xử lý theo đúng backbone (sử dụng hàm \texttt{preprocess\_input} tương ứng của MobileNetV2/EfficientNetB0);
+    \item Tăng cường dữ liệu (data augmentation) như xoay, tịnh tiến, zoom và lật ngang để mô hình tổng quát hơn.
+\end{itemize}
+
+Dữ liệu được tổ chức theo các thư mục tương ứng với từng lớp, ví dụ: \texttt{seg/buildings}, \texttt{seg/forest}, \\ldots{} để tiện cho việc đọc bằng Keras (\texttt{flow\_from\_directory}).
+
+\subsection{Kết quả ra (Output)}
+Đầu ra của mô hình là một vector xác suất độ dài 6, tương ứng với 6 lớp cảnh. Lớp dự đoán cuối cùng là lớp có xác suất lớn nhất (\emph{argmax}). Với mỗi ảnh đầu vào, hệ thống trả về:
+\begin{itemize}
+    \item Nhãn dự đoán (ví dụ: ``sea'');
+    \item Xác suất/độ tin cậy tương ứng (ví dụ: 0.92).
+\end{itemize}
+
+Trong giao diện minh hoạ, có thể hiển thị trực tiếp: ảnh gốc kèm theo nhãn dự đoán và xác suất.
+
+\subsection{Hình minh hoạ}
+\begin{enumerate}
+    \item \textbf{Ví dụ ảnh đầu vào -- đầu ra:} Hình~\ref{fig:ex-mobilenet} và Hình~\ref{fig:ex-efficientnet} minh hoạ 6 ảnh mẫu (mỗi ảnh đại diện một lớp: buildings, forest, glacier, mountain, sea, street). Bên dưới mỗi ảnh ghi nhãn thật, nhãn mô hình dự đoán, và độ tin cậy.
+    
+    \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{examples_6classes_mobilenetv2.png}
+    \caption{Ví dụ phân loại 6 lớp cảnh -- MobileNetV2.}
+    \label{fig:ex-mobilenet}
+\end{figure}
+
+    \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{examples_6classes_efficientnetb0.png}
+    \caption{Ví dụ phân loại 6 lớp cảnh -- EfficientNetB0.}
+    \label{fig:ex-efficientnet}
+\end{figure}
+    \item \textbf{Sơ đồ pipeline hệ thống:} sơ đồ khối gồm các bước: Ảnh đầu vào $\rightarrow$ Tiền xử lý (resize, preprocess\_input, augmentation) $\rightarrow$ Backbone+Head $\rightarrow$ Lớp phân loại Softmax 6 lớp $\rightarrow$ Nhãn dự đoán.
+    \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{pipeline.png}
+\end{figure}
+\end{enumerate}
+
+\FloatBarrier
+
+%=================================================================
+\section{Phương pháp đề xuất}\label{sec:phuong-phap}
+%=================================================================
+
+\subsection{Kiến trúc mô hình}
+Nhóm triển khai hai mô hình phân loại ảnh dựa trên học chuyển tiếp:
+\begin{itemize}
+    \item \textbf{MobileNetV2}: ưu điểm gọn nhẹ, tốc độ suy luận nhanh;
+    \item \textbf{EfficientNetB0}: mạnh hơn, thường cho độ chính xác cao hơn khi fine--tune.
+\end{itemize}
+Với cả hai mô hình, nhóm sử dụng backbone pretrained ImageNet (\texttt{include\_top=False}) để trích xuất đặc trưng. Phần head gồm Global Average Pooling, (tuỳ mô hình) Batch Normalization, Dropout, và Dense Softmax 6 lớp.
+
+\subsection{Chiến lược huấn luyện}
+Quá trình huấn luyện được thực hiện theo hai giai đoạn:
+\begin{enumerate}
+    \item \textbf{Giai đoạn 1 (freeze backbone):} chỉ huấn luyện phần head với learning rate $10^{-4}$.
+    \item \textbf{Giai đoạn 2 (fine--tune):} mở trainable backbone và chỉ fine--tune một số lớp cuối, đồng thời giảm learning rate xuống $10^{-5}$ để tối ưu ổn định.
+\end{enumerate}
+Ngoài ra nhóm dùng các callback như \texttt{ModelCheckpoint} (lưu mô hình tốt nhất theo \texttt{val\_accuracy}), \texttt{EarlyStopping} và \texttt{CSVLogger} để theo dõi quá trình huấn luyện.
+
+\subsection{Cơ chế từ chối ảnh ngoài miền (OOD heuristic)}
+Do bài toán là phân loại đóng (chỉ 6 lớp), khi ảnh đầu vào không thuộc các lớp đã huấn luyện, mô hình vẫn có xu hướng ép gán một nhãn trong 6 lớp. Để hạn chế điều này mà không cần huấn luyện lại, nhóm áp dụng cơ chế \textbf{UNKNOWN} dựa trên ngưỡng:
+\begin{itemize}
+    \item \textbf{Confidence threshold}: nếu $\max(p) < \tau$ thì trả về \texttt{UNKNOWN}.
+    \item \textbf{Entropy threshold}: với $p$ là phân phối softmax, entropy được tính:
+    \begin{equation}
+        H(p) = -\sum_i p_i \log(p_i).
+    \end{equation}
+    Nếu $H(p) > \tau$ thì trả về \texttt{UNKNOWN}.
+\end{itemize}
+Nhóm cũng sử dụng \textbf{temperature scaling} để điều chỉnh độ ``mềm'' của phân phối trước khi tính confidence/entropy.
+
+\subsection{Triển khai demo}
+Nhóm xây dựng web app bằng Streamlit cho phép người dùng upload một ảnh bất kỳ, nhận kết quả dự đoán từ cả hai mô hình, đồng thời hiển thị bảng confidence cho tất cả nhãn. Mô hình sau huấn luyện được lưu dưới định dạng \texttt{.h5} để thuận tiện cho việc nạp và suy luận.
+
+%=================================================================
+\section{Thực nghiệm}\label{sec:thuc-nghiem}
+%=================================================================
+
+\subsection{Mô tả tập dữ liệu: số lượng mẫu, chia train/val/test}
+Bộ dữ liệu sử dụng trong đề tài là bộ dữ liệu phân loại cảnh gồm 6 lớp: buildings, forest, glacier, mountain, sea, street. Mỗi ảnh là ảnh màu RGB chụp ngoài trời, chứa một loại cảnh chiếm ưu thế. Dữ liệu được lưu trong các thư mục con tương ứng với từng lớp.
+
+Trong triển khai cụ thể, dữ liệu được tổ chức theo cấu trúc:
+\begin{itemize}
+    \item \texttt{seg/buildings}
+    \item \texttt{seg/forest}
+    \item \texttt{seg/glacier}
+    \item \texttt{seg/mountain}
+    \item \texttt{seg/sea}
+    \item \texttt{seg/street}
+    \item \texttt{seg\_test/\dots} (cùng 6 lớp)
+\end{itemize}
+
+Tập \texttt{seg} được sử dụng làm dữ liệu huấn luyện và validation thông qua tham số \texttt{validation\_split=0.2}, còn \texttt{seg\_test} được dùng làm tập kiểm tra (test) độc lập. Số lượng ảnh theo từng lớp như Bảng~\ref{tab:dataset-counts}.
+
+\begin{table}[h]
+\centering
+\caption{Thống kê số lượng ảnh theo lớp (tính trên dữ liệu thực tế trong project)}
+\label{tab:dataset-counts}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Lớp} & \textbf{seg (train+val)} & \textbf{seg\_test (test)}\\
+\midrule
+buildings & 2191 & 437\\
+forest & 2271 & 474\\
+glacier & 2404 & 553\\
+mountain & 2512 & 525\\
+sea & 2274 & 510\\
+street & 2382 & 501\\
+\midrule
+\textbf{Tổng} & 14034 & 3000\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Với \texttt{validation\_split=0.2}, dữ liệu trong \texttt{seg} được tách xấp xỉ theo tỉ lệ 80/20 cho train/val để theo dõi overfitting trong quá trình huấn luyện.
+\begin{itemize}
+    \item Tập huấn luyện (train): khoảng 80\% số ảnh từ \texttt{seg}, tương đương $N_{train}$ ảnh;
+    \item Tập validation (val): khoảng 20\% số ảnh còn lại từ \texttt{seg}, tương đương $N_{val}$ ảnh;
+    \item Tập kiểm tra (test): toàn bộ ảnh trong \texttt{seg\_test}, tương đương $N_{test}$ ảnh.
+\end{itemize}
+
+Việc chia dữ liệu theo tỉ lệ 80/20 giúp mô hình có đủ dữ liệu để học, đồng thời vẫn có một tập validation riêng để theo dõi hiện tượng overfitting trong quá trình huấn luyện.
+
+\subsection{Độ đo đánh giá}
+Để đánh giá chất lượng mô hình phân loại cảnh, báo cáo sử dụng chủ yếu độ đo \textbf{accuracy} (độ chính xác), ngoài ra có thể tham khảo thêm ma trận nhầm lẫn (confusion matrix) và các chỉ số precision, recall, F1--score cho từng lớp.
+
+\paragraph{Accuracy} Được định nghĩa là tỉ lệ số mẫu được dự đoán đúng trên tổng số mẫu:
+\begin{equation}
+    \text{Accuracy} = \frac{\text{Số mẫu dự đoán đúng}}{\text{Tổng số mẫu}}.
+\end{equation}
+Độ đo này phù hợp với bài toán phân loại đa lớp khi dữ liệu tương đối cân bằng giữa các lớp.
+
+\paragraph{Confusion matrix} Là ma trận kích thước $6\times 6$ (vì có 6 lớp), trong đó mỗi hàng tương ứng với nhãn thật, mỗi cột tương ứng với nhãn dự đoán. Ma trận này giúp quan sát mô hình hay nhầm lẫn giữa những cặp lớp nào (ví dụ: \texttt{glacier} với \texttt{mountain}, \texttt{buildings} với \texttt{street}).
+
+\paragraph{Precision, Recall, F1--score} \hfill\\
+Với từng lớp, có thể tính các độ đo:
+\begin{itemize}
+    \item \textbf{Precision} (độ chính xác theo lớp): trong số những ảnh mà mô hình dự đoán là lớp X, có bao nhiêu ảnh thực sự thuộc lớp X;
+    \item \textbf{Recall} (độ bao phủ): trong số tất cả ảnh thực sự thuộc lớp X, mô hình bắt đúng được bao nhiêu;
+    \item \textbf{F1--score}: trung bình điều hoà giữa precision và recall, dùng để cân bằng hai chỉ số này.
+\end{itemize}
+
+Trong thực nghiệm, báo cáo theo dõi accuracy trên tập huấn luyện và validation sau mỗi epoch để kiểm tra mô hình có hội tụ và tránh overfitting. Cuối cùng, accuracy trên tập test và confusion matrix được báo cáo để đánh giá xem mô hình hoạt động tốt hay khó khăn với những lớp cảnh nào.
+
+%=================================================================
+\section{Kết quả và thảo luận}\label{sec:ket-qua}
+%=================================================================
+
+\subsection{So sánh hai mô hình}
+Nhóm so sánh MobileNetV2 và EfficientNetB0 trên cùng cấu hình dữ liệu và tiền xử lý.
+
+\begin{table}[h]
+\centering
+\caption{So sánh kết quả hai mô hình trên tập test}
+\label{tab:model-compare}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Mô hình} & \textbf{Test accuracy} & \textbf{Ghi chú}\\
+\midrule
+MobileNetV2 & \accMobileNet & pretrained ImageNet, transfer learning\\
+EfficientNetB0 & \accEfficientNet & pretrained ImageNet, fine--tune 2 giai đoạn\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Confusion matrix và các chỉ số theo lớp}
+Để đánh giá chi tiết theo từng lớp, nhóm báo cáo confusion matrix và các chỉ số Precision/Recall/F1 cho mỗi nhãn.
+
+\subsubsection{Kết quả theo từng mô hình}
+
+% Reset numbering so it matches: Hình 1/Bảng 1, Hình 2/Bảng 2 trong mục này
+\setcounter{figure}{0}
+\setcounter{table}{0}
+
+\paragraph{MobileNetV2}
+Hình~\ref{fig:cm-mobilenet} minh hoạ ma trận nhầm lẫn của MobileNetV2 trên tập \texttt{seg\_test}. Bảng~\ref{tab:cls-report-mobilenet} trình bày các chỉ số theo lớp.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{cm_mobilenetv2.png}
+    \caption{Confusion matrix của MobileNetV2 trên tập \texttt{seg\_test}.}
+    \label{fig:cm-mobilenet}
+\end{figure}
+
+\FloatBarrier
+
+\begin{table}[!htbp]
+\centering
+\caption{Chỉ số theo lớp của MobileNetV2 trên tập test (Precision/Recall/F1).}
+\label{tab:cls-report-mobilenet}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Lớp} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score}\\
+\midrule
+buildings & 0.9155 & 0.9176 & 0.9166\\
+forest & 0.9915 & 0.9895 & 0.9905\\
+glacier & 0.8405 & 0.8481 & 0.8443\\
+mountain & 0.8560 & 0.8381 & 0.8470\\
+sea & 0.9417 & 0.9510 & 0.9463\\
+street & 0.9243 & 0.9261 & 0.9252\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+
+\paragraph{EfficientNetB0}
+Hình~\ref{fig:cm-efficientnet} minh hoạ ma trận nhầm lẫn của EfficientNetB0 trên tập \texttt{seg\_test}. Bảng~\ref{tab:cls-report-efficientnet} trình bày các chỉ số theo lớp.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{cm_efficientnetb0.png}
+    \caption{Confusion matrix của EfficientNetB0 trên tập \texttt{seg\_test}.}
+    \label{fig:cm-efficientnet}
+\end{figure}
+
+\FloatBarrier
+
+\begin{table}[!htbp]
+\centering
+\caption{Chỉ số theo lớp của EfficientNetB0 trên tập test (Precision/Recall/F1).}
+\label{tab:cls-report-efficientnet}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Lớp} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score}\\
+\midrule
+buildings & 0.9180 & 0.8970 & 0.9074\\
+forest & 0.9979 & 0.9831 & 0.9904\\
+glacier & 0.8612 & 0.7071 & 0.7766\\
+mountain & 0.7563 & 0.9105 & 0.8263\\
+sea & 0.9465 & 0.9373 & 0.9419\\
+street & 0.9068 & 0.9321 & 0.9193\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+
+\subsection{Nhận xét về ảnh ngoài miền và cơ chế UNKNOWN}
+Trong thử nghiệm demo, khi ảnh đầu vào thuộc 6 lớp đã học, cả hai mô hình thường dự đoán đúng với độ tin cậy cao. Tuy nhiên khi ảnh \emph{ngoài miền} (không thuộc 6 lớp), mô hình có thể đưa ra nhãn khác nhau và đôi khi ``tự tin sai''. Do đó, cơ chế UNKNOWN dựa trên ngưỡng (confidence/entropy) được dùng để giảm rủi ro gán nhãn sai trong trường hợp ảnh lạ.
+
+\subsection{Đánh giá, nhận xét: Ưu điểm và Hạn chế}
+
+\subsubsection{Ưu điểm}
+\begin{itemize}
+    \item \textbf{Độ chính xác cao:} MobileNetV2 đạt 90.93\% accuracy, EfficientNetB0 đạt 89.07\%, đều vượt ngưỡng 85\%. Đặc biệt, các lớp forest (F1 > 0.99) và sea (F1 > 0.94) được phân loại rất tốt.
+    
+    \item \textbf{Kiến trúc nhẹ và nhanh:} MobileNetV2 có kích thước nhỏ (~8.7MB), tốc độ suy luận nhanh, phù hợp cho triển khai trên thiết bị di động.
+    
+    \item \textbf{Transfer learning hiệu quả:} Sử dụng backbone pretrained ImageNet giúp giảm dữ liệu cần thiết (chỉ 14K ảnh train) mà vẫn đạt hiệu suất cao.
+    
+    \item \textbf{Cơ chế UNKNOWN:} Giảm rủi ro ép gán nhãn sai với ảnh ngoài miền, nâng cao độ tin cậy hệ thống.
+    
+    \item \textbf{Triển khai dễ dàng:} Web demo Streamlit cho phép người dùng tương tác trực quan mà không cần kỹ năng lập trình.
+\end{itemize}
+
+\subsubsection{Hạn chế}
+\begin{itemize}
+    \item \textbf{Nhầm lẫn giữa các lớp giống nhau:} Glacier và Mountain có F1--score thấp hơn (0.78--0.84), do hình ảnh tương tự nhau. Tương tự, Buildings và Street cũng dễ nhầm lẫn.
+    
+    \item \textbf{Phụ thuộc điều kiện ánh sáng:} Mô hình chưa được test trên ảnh chụp từ các góc nhìn khác nhau, điều kiện thời tiết đặc biệt (đêm, mưa), có thể ảnh hưởng độ chính xác thực tế.
+    
+    \item \textbf{OOD detection còn đơn giản:} Cơ chế UNKNOWN hiện chỉ dựa trên confidence/entropy threshold, chưa được huấn luyện trên dữ liệu OOD cụ thể, nên hiệu quả chưa tối ưu.
+    
+    \item \textbf{Bộ dữ liệu giới hạn:} Chỉ 6 lớp cảnh, không bao quát các loại cảnh khác (đô thị ban đêm, sa mạc, thành phố dưới nước, \ldots).
+    
+    \item \textbf{Không xử lý ảnh đa cảnh:} Mô hình giả định mỗi ảnh chỉ thuộc 1 lớp; ảnh chứa nhiều cảnh (ví dụ: núi với biển) chỉ được gán 1 nhãn duy nhất.
+\end{itemize}
+%=================================================================
+\section{Kết luận}
+%=================================================================
+
+Nhóm đã xây dựng thành công hệ thống phân loại cảnh tự nhiên bằng hai kiến trúc CNN pretrained (MobileNetV2 và EfficientNetB0) với độ chính xác lần lượt là 90.93\% và 89.07\% trên tập test độc lập. Kết quả thử nghiệm cho thấy cả hai mô hình đều đạt hiệu suất cao, đáp ứng mục tiêu ban đầu của đề tài. MobileNetV2 tỏ ra ổn định hơn trên các lớp cảnh khó nhận diện (glacier, mountain), trong khi EfficientNetB0 cân bằng tốt hơn giữa độ chính xác và khả năng tổng quát hóa. Quá trình huấn luyện hai giai đoạn (freeze backbone rồi fine--tune) đã giúp tối ưu hóa việc học chuyển tiếp từ ImageNet sang bài toán phân loại cảnh cụ thể.
+
+Hệ thống được triển khai dưới dạng web app Streamlit, cho phép người dùng upload ảnh và nhận kết quả dự đoán từ cả hai mô hình với giao diện thân thiện và trực quan. Bên cạnh đó, cơ chế UNKNOWN dựa trên ngưỡng confidence/entropy giúp phát hiện và từ chối dự đoán đối với ảnh ngoài miền, nâng cao độ an toàn của hệ thống khi triển khai thực tế.
+
+Sang phía trước, các hướng cải tiến có thể bao gồm: (1) thử nghiệm thêm các backbone mới như Vision Transformer hoặc ConvNeXt, (2) kết hợp ensemble learning để nâng độ chính xác tổng hợp, (3) tối ưu OOD detection bằng cách huấn luyện với dữ liệu ngoài miền cụ thể, (4) mở rộng bộ dữ liệu với các lớp cảnh mới (đô thị ban đêm, sa mạc, thành phố dưới nước), và (5) phát triển giao diện tiên tiến hơn cho ứng dụng triển khai.
+
+%=================================================================
+\section{Tài liệu tham khảo}
+%=================================================================
+
+\begin{thebibliography}{99}
+    \bibitem{imagenet} Krizhevsky, A., Sutskever, I., \& Hinton, G. E. (2012). ``ImageNet classification with deep convolutional neural networks.'' \textit{Advances in neural information processing systems}, 25.
+    
+    \bibitem{mobilenetv2} Sandler, M., Howard, A., Zhu, M., Zhmoginov, A., \& Chen, L. C. (2018). ``MobileNetV2: Inverted residuals and linear bottlenecks.'' In \textit{IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)} (pp. 4510--4520).
+    
+    \bibitem{efficientnet} Tan, M., \& Le, Q. V. (2019). ``EfficientNet: Rethinking model scaling for convolutional neural networks.'' In \textit{International Conference on Machine Learning (ICML)} (pp. 6105--6114). PMLR.
+    
+    \bibitem{keras} Chollet, F., et al. (2015). ``Keras.'' GitHub. Retrieved from \url{https://github.com/fchollet/keras}.
+    
+    \bibitem{tensorflow} Abadi, M., Barham, P., Chen, J., et al. (2016). ``TensorFlow: A system for large-scale machine learning.'' In \textit{Proceedings of the 12th USENIX Symposium on Operating Systems Design and Implementation (OSDI)}, Savannah, GA, USA.
+    
+    \bibitem{transferlearning} Yosinski, J., Clune, J., Bengio, Y., \& Liphardt, H. (2014). ``How transferable are features in deep neural networks?'' In \textit{Advances in neural information processing systems} (pp. 3320--3328). 
+    
+    \bibitem{dataaugmentation} Goodfellow, I., Bengio, Y., \& Courville, A. (2016). \textit{Deep Learning}. MIT Press. Chapter 7: Regularization for Deep Learning.
+    
+    \bibitem{streamlit} Streamlit Inc. (2023). ``Streamlit -- The fastest way to build and share data apps.'' Retrieved from \url{https://streamlit.io}.
+    
+    \bibitem{confusion} Powers, D. M. (2011). ``Evaluation: From precision, recall and F--measure to ROC, informedness, markedness and correlation.'' \textit{Journal of Machine Learning Technologies}, 2(1), 37--63.
+\end{thebibliography}
+
+\end{document}
