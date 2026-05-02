@@ -18,7 +18,7 @@ pip install -r requirements.txt
 - `Training file`: notebooks huấn luyện
 
 **Chạy nhanh (local)**
-1. Đảm bảo hai file mô hình có trong thư mục `App demo/Model/`. Nếu không, làm theo phần "Tải mô hình" phía dưới.
+1. Đảm bảo hai file mô hình có trong thư mục `Model/`. Nếu không, làm theo phần "Tải mô hình" phía dưới.
 2. Từ thư mục gốc dự án chạy:
 
 ```bash
