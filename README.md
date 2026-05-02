@@ -15,7 +15,7 @@ pip install -r requirements.txt
 - `App demo/Model/`: chứa mô hình huấn luyện (`scene_mobilenetv2.h5`, `scene_efficientnetb0.h5`)
 - `images/`: ảnh kết quả (ma trận nhầm lẫn, ảnh minh họa, pipeline)
 - `evaluate_models.py`, `create_examples_image.py`: script đánh giá và tạo ảnh minh họa
-- `Training/`: notebooks huấn luyện và mã liên quan
+- `Training file`: notebooks huấn luyện
 
 **Chạy nhanh (local)**
 1. Đảm bảo hai file mô hình có trong thư mục `App demo/Model/`. Nếu không, làm theo phần "Tải mô hình" phía dưới.
