@@ -27,20 +27,6 @@ streamlit run "App demo/streamlit_app.py"
 
 Giao diện sẽ cho phép upload ảnh và hiển thị dự đoán cùng độ tin cậy từ hai mô hình.
 
-```bash
-mkdir -p "App demo/Model"
-curl -L -o "App demo/Model/scene_mobilenetv2.h5" "<MODEL_URL_1>"
-curl -L -o "App demo/Model/scene_efficientnetb0.h5" "<MODEL_URL_2>"
-```
-
-Hoặc trên Windows PowerShell:
-
-```powershell
-mkdir "App demo/Model"
-Invoke-WebRequest -Uri "<MODEL_URL_1>" -OutFile "App demo/Model/scene_mobilenetv2.h5"
-Invoke-WebRequest -Uri "<MODEL_URL_2>" -OutFile "App demo/Model/scene_efficientnetb0.h5"
-```
-
 **Lưu ý**
 - Ứng dụng Streamlit tự động tìm `Model/` và `seg/` bằng cách dò lên các thư mục cha, nên có thể chạy từ `App demo/`.
 - Nếu gặp lỗi đường dẫn, chạy từ thư mục gốc hoặc kiểm tra rằng các file `.h5` nằm đúng chỗ.
