@@ -10,8 +10,25 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mob_p
 
 
 BASE_DIR = Path(__file__).resolve().parent
-TRAIN_DIR = BASE_DIR / "seg"
-MODEL_DIR = BASE_DIR / "Model"
+
+
+def locate_dir(name: str, start: Path, max_up: int = 4) -> Path:
+    """Search for a directory named `name` starting at `start` and going up at most
+    `max_up` parent directories. If not found, return start/name (non-existing).
+    This makes the App demo runnable from a subfolder such as 'App demo'."""
+    cur = start
+    for _ in range(max_up + 1):
+        candidate = cur / name
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    return start / name
+
+
+TRAIN_DIR = locate_dir("seg", BASE_DIR)
+MODEL_DIR = locate_dir("Model", BASE_DIR)
 MODELS = [
     {
         "name": "EfficientNetB0",
